@@ -7,32 +7,35 @@ if [ ! -d "$LOCAL_DIR" ]; then
 	LOCAL_DIR="$( dirname "$( readlink -f "$0" )" )"
 fi
 
-# Check if the dirs are sourced
-if [ ! -d "$UTIL_DIR" ]; then
-	. "$LOCAL_DIR/dirs"
-fi
+#. $LOCAL_DIR/config
 
-# Source helper scripts and variables
-. $UTIL_DIR/util
+# Collect api keys
+. $LOCAL_DIR/keys
 
 # Setup virtualenv
-. $LOCAL_DIR/venv/bin/activate
+#. $LOCAL_DIR/venv/bin/activate
+#RET=$(python $LOCAL_DIR/ac_mon.py)
+#echo "Return status: $RET"
 
-RET=$(python $LOCAL_DIR/ac_mon.py $AVR_DEV)
+sudo sh -c "echo 27 > /sys/class/gpio/export"
+sudo sh -c "echo in > /sys/class/gpio/gpio27/direction"
+VAL=$(sudo cat /sys/class/gpio/gpio27/value)
+RET=$?
+sudo sh -c "echo 27 > /sys/class/gpio/unexport"
 
-echo "Return status: $RET"
+echo "GPIO Value: ${VAL}, Return Value: ${RET}"
 
-MSG="Testing cron job; "
-
-if [ $RET -eq 1 ]; then
-	MSG+="Fablab ac bucket is full!"
-else
-	MSG+="Fablab ac bucket is not full."
+if [ $RET -eq 0 ] && [ $VAL -eq 0 ]; then
+	MSG="Sensors indicate the Fabrication Laboratory's condensed humidity reservior has reached maximum capacity."
+	curl --request POST \
+	--url https://crump.space/rq-dev/api/v1.0/messages \
+	--header 'content-type: application/json' \
+	--data "{\"type\":\"command\",\"key\":\"${RQ_ML_KEY}\",\"destination\":\"rqirc\",\"data\":{\"channel\":\"##rqtest\",\"isaction\":false,\"message\":\"${MSG}\"}}"
 fi
 
-write_msg "RQ" "$MSG"
+#write_msg "RQ" "$MSG"
 
-deactivate
+#deactivate
 
 function check_port {
 echo "Checking $AVR_DEV against"
